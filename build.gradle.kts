@@ -1,11 +1,3 @@
-import org.jetbrains.kotlin.fir.declarations.FirDeclarationAttributes
-import org.jetbrains.kotlin.fir.declarations.builder.buildField
-import org.jetbrains.kotlin.fir.declarations.builder.buildProperty
-import org.jetbrains.kotlin.fir.declarations.builder.buildValueParameter
-import org.jetbrains.kotlin.name.Name
-import java.io.FileInputStream
-import java.util.*
-
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.0.0"
