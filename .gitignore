@@ -8,6 +8,7 @@ build/
 .idea/modules.xml
 .idea/jarRepositories.xml
 .idea/compiler.xml
+.idea/vcs.xml
 .idea/libraries/
 *.iws
 *.iml
@@ -43,5 +44,4 @@ bin/
 
 .intellijPlatform
 .run
-src/main/kotlin/secrets.kt
-
+src/main/kotlin/com/qonto/dustplugin/dustintellijplugin/secrets.kt
