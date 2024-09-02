@@ -64,7 +64,6 @@ class DustApiService {
         val res = request<RemoteConversation> {
             response
         }
-        thisLogger().info("MAHYA:: createConversation RESPONSE IS $res")
         res.onSuccess {
             thisLogger().warn(
                 "MAHYA:: Create conversation IS SUCCESS in ✅ ${
