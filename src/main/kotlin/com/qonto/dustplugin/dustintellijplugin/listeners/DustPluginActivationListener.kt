@@ -14,18 +14,25 @@ internal class DustPluginActivationListener : ApplicationActivationListener {
     override fun applicationActivated(ideFrame: IdeFrame) {
 
         runBlocking {
-            thisLogger().warn("MAHYA:: IN SUSPEND START")
+            thisLogger().info("MAHYA:: IN SUSPEND START")
 
             dustRepository.listAllAssistants()
                 .onSuccess {
-                    thisLogger().warn("MAHYA:: IN SUCCESS")
                     thisLogger().info("MAHYA:: Assistant ⚠️ ${it.size}")
                 }
                 .onFailure {
-                    thisLogger().warn("MAHYA:: IN FAILURE")
+                    thisLogger().error("MAHYA:: Assistant IN FAILURE ${it.message}")
                 }
 
-            thisLogger().warn("MAHYA:: IN SUSPEND END")
+            dustRepository.createConversation()
+                .onSuccess {
+                    thisLogger().info("MAHYA:: Conversation ⚠️ Id: ${it.id}")
+                }
+                .onFailure {
+                    thisLogger().error("MAHYA:: Conversation IN FAILURE ${it.message}")
+                }
+
+            thisLogger().info("MAHYA:: IN SUSPEND END")
         }
     }
 }
