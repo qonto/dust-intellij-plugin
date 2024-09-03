@@ -5,6 +5,7 @@ import com.qonto.dustplugin.dustintellijplugin.models.Conversation
 import com.qonto.dustplugin.dustintellijplugin.remote.DustApiService
 import com.qonto.dustplugin.dustintellijplugin.remote.models.ConversationInfo
 import com.qonto.dustplugin.dustintellijplugin.remote.models.RemoteAssistant
+import com.qonto.dustplugin.dustintellijplugin.remote.models.RemoteMessage
 
 class DustRepository(
     private val dustApiService: DustApiService
@@ -23,6 +24,10 @@ class DustRepository(
             .map {
                 it.toConversation()
             }
+    }
+
+    suspend fun createMessage(): Result<RemoteMessage> {
+        return dustApiService.createMessage()
     }
 
     private fun RemoteAssistant.toAssistant() = Assistant(

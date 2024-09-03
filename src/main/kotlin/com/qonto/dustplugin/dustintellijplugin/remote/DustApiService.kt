@@ -1,12 +1,10 @@
 package com.qonto.dustplugin.dustintellijplugin.remote
 
 import API_KEY
+import USERNAME
 import WORKSPACE_ID
 import com.intellij.openapi.diagnostic.thisLogger
-import com.qonto.dustplugin.dustintellijplugin.remote.models.ConversationInfo
-import com.qonto.dustplugin.dustintellijplugin.remote.models.RemoteAssistant
-import com.qonto.dustplugin.dustintellijplugin.remote.models.RemoteAssistants
-import com.qonto.dustplugin.dustintellijplugin.remote.models.RemoteConversation
+import com.qonto.dustplugin.dustintellijplugin.remote.models.*
 import io.ktor.client.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
@@ -19,7 +17,9 @@ import kotlinx.serialization.json.Json
 class DustApiService {
 
     private val httpClient = HttpClient {
-        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        install(ContentNegotiation) {
+            json(Json { ignoreUnknownKeys = true })
+        }
         install(Logging) { logger = Logger.SIMPLE }
     }
 
@@ -43,7 +43,7 @@ class DustApiService {
                 "MAHYA:: RESPONSE IS SUCCESS in ✅\n First 10 are: ${
                     res.map {
                         it.agentConfigurations.take(10).map {
-                            it.name
+                            "NAME: ${it.name} ; ID: ${it.sId}"
                         }
                     }
                 }\n Size of agents: ${it.agentConfigurations.size}"
@@ -54,7 +54,7 @@ class DustApiService {
     }
 
     suspend fun createConversation(): Result<ConversationInfo> {
-        val url = "$BASE_URL/$CREATE_CONVERSATION_PATH"
+        val url = "$BASE_URL/$CONVERSATION_PATH"
 
         val response: HttpResponse = httpClient.post(url) {
             headerBuilder()
@@ -77,9 +77,33 @@ class DustApiService {
         }
     }
 
+    suspend fun createMessage(
+        conversationId: String = "luHHrwe72b",
+        message: String = "HELLO FROM MAHYA",
+        assistantId: String = "mistral-large"
+    ): Result<RemoteMessage> {
+        val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/messages"
+
+        val response: HttpResponse = httpClient.post(url) {
+            headerBuilder()
+            setBody("{ \"mentions\": [ { \"configurationId\": \"$assistantId\" } ], \"context\": { \"origin\": \"api\", \"username\": \"$USERNAME\", \"timezone\": \"Europe/Paris\", \"fullName\": \"\", \"email\": \"\", \"profilePictureUrl\": \"\", \"content\": \"\" }, \"content\": \"$message\" }")
+        }
+        val res = request<RemoteMessage> {
+            response
+        }
+
+        res.onSuccess {
+            thisLogger().warn(
+                "MAHYA:: Create message IS SUCCESS in ✅ ${res.map { it }}"
+            )
+        }
+
+        return res
+    }
+
     companion object {
         private const val ASSISTANTS_PATH = "assistant/agent_configurations"
-        private const val CREATE_CONVERSATION_PATH = "assistant/conversations"
+        private const val CONVERSATION_PATH = "assistant/conversations"
         private val BASE_URL = "https://dust.tt/api/v1/w/$WORKSPACE_ID"
     }
 }

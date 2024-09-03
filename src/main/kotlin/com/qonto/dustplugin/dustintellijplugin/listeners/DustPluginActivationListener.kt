@@ -16,6 +16,8 @@ internal class DustPluginActivationListener : ApplicationActivationListener {
             dustRepository.listAllAssistants()
 
             dustRepository.createConversation()
+
+            dustRepository.createMessage()
         }
     }
 }
