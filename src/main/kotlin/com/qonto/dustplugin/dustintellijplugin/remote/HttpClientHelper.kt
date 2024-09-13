@@ -11,6 +11,7 @@ suspend inline fun <reified T> request(
     val response: T = httpResponse.body()
     Result.success(response)
 } catch (exception: ResponseException) {
+    exception.printStackTrace()
     Result.failure(exception)
 } catch (exception: Throwable) {
     exception.printStackTrace()
