@@ -145,12 +145,12 @@ class DustApiService {
             val buffer = ByteArray(2048) // 2KB buffer size
             var bytesRead: Int
 
-            val twoChunks: MutableList<String> = MutableList(2) { "" }
+            val threeChunks: MutableList<String> = MutableList(3) { "" }
             inputStream.use { stream ->
                 try {
                     while (stream.read(buffer).also { bytesRead = it } != -1) {
 
-                        val chunks = saveChunksAndReturnThem(buffer, bytesRead, twoChunks)
+                        val chunks = saveChunksAndReturnThem(buffer, bytesRead, threeChunks)
 
                         val index = chunks.indexOf("\"type\":\"agent_message_new\"")
                         if (index != -1) {
@@ -178,22 +178,25 @@ class DustApiService {
     private fun saveChunksAndReturnThem(
         buffer: ByteArray,
         bytesRead: Int,
-        twoChunks: MutableList<String>
+        threeChunks: MutableList<String>
     ): String {
         // We need at most two chunks to get the agents message id
         // one is not enough because it can be received at the ned of the chunk so
         // it will be broken
         val chunk = String(buffer.copyOf(bytesRead))
-        if (twoChunks[0].isEmpty()) {
-            twoChunks.add(0, chunk)
-        } else if (twoChunks[1].isEmpty()) {
-            twoChunks.add(1, chunk)
+        if (threeChunks[0].isEmpty()) {
+            threeChunks[0] = chunk
+        } else if (threeChunks[1].isEmpty()) {
+            threeChunks[1] = chunk
+        } else if (threeChunks[2].isEmpty()) {
+            threeChunks[2] = chunk
         } else {
-            Collections.rotate(twoChunks, -1)
-            twoChunks.add(1, chunk)
+            threeChunks[0] = threeChunks[1]
+            threeChunks[1] = threeChunks[2]
+            threeChunks[2] = chunk
         }
 
-        return twoChunks.toString()
+        return threeChunks.toString()
     }
 
 
