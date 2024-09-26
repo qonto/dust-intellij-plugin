@@ -29,7 +29,7 @@ class DustApiService {
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
         }
-        install(Logging) { logger = Logger.SIMPLE }
+        install(Logging) { logger = Logger.EMPTY }
         install(HttpTimeout) {
             requestTimeoutMillis = 10000L
         }
@@ -51,14 +51,14 @@ class DustApiService {
             response
         }
         res.onSuccess {
-            thisLogger().warn(
+            println(
                 "MAHYA:: RESPONSE IS SUCCESS in ✅\n First 10 are: ${
                     res.map {
                         it.agentConfigurations.take(10).map {
                             "NAME: ${it.name} ; ID: ${it.sId}"
                         }
                     }
-                }\n Size of agents: ${it.agentConfigurations.size}"
+                }\n Size of agents: ${it.agentConfigurations.size} \n"
             )
         }
 
@@ -77,10 +77,10 @@ class DustApiService {
             response
         }
         res.onSuccess {
-            thisLogger().warn(
+            println(
                 "MAHYA:: Create conversation IS SUCCESS in ✅ ${
                     res.map { it }
-                }\n Conversation Id: ${it.conversation.sId}"
+                }\n Conversation Id: ${it.conversation.sId} \n"
             )
         }
 
@@ -91,7 +91,7 @@ class DustApiService {
 
     suspend fun createMessage(
         conversationId: String = CONVERSATION_ID,
-        message: String = "HELLO FROM MAHYA ${Date.from(Instant.now())}",
+        message: String,
         assistantId: String = "mistral-large"
     ): Result<RemoteMessage> {
         val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/messages"
@@ -112,8 +112,8 @@ class DustApiService {
         }
 
         res.onSuccess {
-            thisLogger().warn(
-                "MAHYA:: Create message IS SUCCESS in ✅ ${res.map { it }}"
+            println(
+                "MAHYA:: Create message IS SUCCESS in ✅ ${res.map { it }} \n"
             )
         }
 
@@ -129,6 +129,7 @@ class DustApiService {
     fun getLastAgentMessageId(
         conversationId: String = CONVERSATION_ID,
     ): Flow<MessageMeta> {
+        println("MAHYA:: Start getLastAgentMessageId \n")
         var messageId: String? = null
         val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/events"
 
@@ -158,7 +159,6 @@ class DustApiService {
                             .substringBefore(",")
 
                         messageId = id.substringAfter("\"").substringBefore("\"")
-                        println("MAHYA:: ID $messageId TIME: ${Date.from(Instant.now())} \n")
                     }
                 }
             } catch (ex: Exception) {
@@ -166,7 +166,7 @@ class DustApiService {
             }
         }
 
-        println("MAHYA:: DONE : Message ID $messageId  Conversation ID $conversationId  TIME: ${Date.from(Instant.now())}\n")
+        println("MAHYA:: DONE : Message ID $messageId ::: Conversation ID $conversationId  \nTIME: ${Date.from(Instant.now())}\n")
 
         return flowOf(
             if (messageId != null) {
@@ -184,6 +184,8 @@ class DustApiService {
         conversationId: String,
         messageId: String,
     ): String {
+        println("MAHYA:: Start getMessageContent \n")
+
         val messagesPath = "messages/$messageId/events"
         val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/$messagesPath"
 
@@ -200,6 +202,7 @@ class DustApiService {
 
         val threeChunks: MutableList<String> = MutableList(3) { "" }
 
+        var messageContent = ""
         eventsConnection.getInputStream().use { stream ->
             try {
                 while (stream.read(buffer).also { bytesRead = it } != -1) {
@@ -211,7 +214,7 @@ class DustApiService {
                             .substringAfter("\"content\":")
                             .substringBefore(",\"chainOfThought\"")
 
-                        println("MAHYA:: CONTENT $content TIME: ${Date.from(Instant.now())} \n")
+                        messageContent = content
                     }
                 }
 
@@ -221,8 +224,8 @@ class DustApiService {
             }
         }
 
-
-        return ""
+        println("MAHYA:: CONTENT from Dust $messageContent \nTIME: ${Date.from(Instant.now())} \n")
+        return messageContent
     }
 
     private fun saveChunksAndReturnThem(

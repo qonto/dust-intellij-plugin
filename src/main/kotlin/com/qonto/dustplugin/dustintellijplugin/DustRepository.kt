@@ -5,7 +5,6 @@ import com.qonto.dustplugin.dustintellijplugin.models.Conversation
 import com.qonto.dustplugin.dustintellijplugin.remote.DustApiService
 import com.qonto.dustplugin.dustintellijplugin.remote.MessageMeta
 import com.qonto.dustplugin.dustintellijplugin.remote.models.*
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 
 class DustRepository(
@@ -29,10 +28,10 @@ class DustRepository(
 
     suspend fun createMessage(
 //        conversationId: String,
-//        message: String,
-//        assistantId: String
+        message: String,
+        assistantId: String
     ): Result<RemoteMessage> {
-        return dustApiService.createMessage()
+        return dustApiService.createMessage(message = message, assistantId = assistantId)
     }
 
     fun getLastAgentMessageId(
