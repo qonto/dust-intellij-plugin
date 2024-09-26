@@ -14,8 +14,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.core.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.json.Json
 import java.net.URL
 import java.time.Instant
@@ -31,7 +31,7 @@ class DustApiService {
         }
         install(Logging) { logger = Logger.SIMPLE }
         install(HttpTimeout) {
-            requestTimeoutMillis = 1000L
+            requestTimeoutMillis = 10000L
         }
     }
 
@@ -126,53 +126,103 @@ class DustApiService {
     "Some HTTP client libraries only return the response body after the connection has been closed by the server."
     In this method I'm only able to read the buffer after 25 seconds!
      */
-    suspend fun getLastAgentMessageId(
+    fun getLastAgentMessageId(
         conversationId: String = CONVERSATION_ID,
-    ): String? {
+    ): Flow<MessageMeta> {
         var messageId: String? = null
         val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/events"
 
-        // Reads all the events and waits until the stream is closed
-        withContext(Dispatchers.IO) {
-            val eventsConnection = URL(url).openConnection()
-                .apply {
-                    readTimeout = 10000
-                    connectTimeout = 60000
-                    setRequestProperty("Authorization", "Bearer $API_KEY")
-                }
+        val eventsConnection = URL(url).openConnection()
+            .apply {
+                readTimeout = 10000
+                connectTimeout = 60000
+                setRequestProperty("Authorization", "Bearer $API_KEY")
+            }
 
-            val inputStream = eventsConnection.getInputStream()
-            val buffer = ByteArray(2048) // 2KB buffer size
-            var bytesRead: Int
+        val inputStream = eventsConnection.getInputStream()
+        val buffer = ByteArray(2048) // 2KB buffer size
+        var bytesRead: Int
 
-            val threeChunks: MutableList<String> = MutableList(3) { "" }
-            inputStream.use { stream ->
-                try {
-                    while (stream.read(buffer).also { bytesRead = it } != -1) {
+        val threeChunks: MutableList<String> = MutableList(3) { "" }
+        inputStream.use { stream ->
+            try {
+                while (stream.read(buffer).also { bytesRead = it } != -1) {
 
-                        val chunks = saveChunksAndReturnThem(buffer, bytesRead, threeChunks)
+                    val chunks = saveChunksAndReturnThem(buffer, bytesRead, threeChunks)
 
-                        val index = chunks.indexOf("\"type\":\"agent_message_new\"")
-                        if (index != -1) {
-                            val id = chunks
-                                .substringAfterLast("\"type\":\"agent_message_new\"")
-                                .substringAfter("\"messageId\":")
-                                .substringBefore(",")
+                    val index = chunks.indexOf("\"type\":\"agent_message_new\"")
+                    if (index != -1) {
+                        val id = chunks
+                            .substringAfterLast("\"type\":\"agent_message_new\"")
+                            .substringAfter("\"messageId\":")
+                            .substringBefore(",")
 
-                            messageId = id
-                            println("MAHYA:: ID $messageId TIME: ${Date.from(Instant.now())} \n")
-                        }
+                        messageId = id.substringAfter("\"").substringBefore("\"")
+                        println("MAHYA:: ID $messageId TIME: ${Date.from(Instant.now())} \n")
                     }
-                } catch (ex: Exception) {
-                    println("MAHYA:: Exception $ex")
                 }
+            } catch (ex: Exception) {
+                println("MAHYA:: Exception $ex")
+            }
+        }
+
+        println("MAHYA:: DONE : Message ID $messageId  Conversation ID $conversationId  TIME: ${Date.from(Instant.now())}\n")
+
+        return flowOf(
+            if (messageId != null) {
+                MessageMeta.Available(
+                    messageId = messageId!!,
+                    conversationId = conversationId
+                )
+            } else {
+                MessageMeta.NotAvailable
+            }
+        )
+    }
+
+    fun getMessageContent(
+        conversationId: String,
+        messageId: String,
+    ): String {
+        val messagesPath = "messages/$messageId/events"
+        val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/$messagesPath"
+
+        // Reads all the events and waits until the stream is closed
+        val eventsConnection = URL(url).openConnection()
+            .apply {
+                readTimeout = 10000
+                connectTimeout = 60000
+                setRequestProperty("Authorization", "Bearer $API_KEY")
+            }
+
+        val buffer = ByteArray(2048) // 2KB buffer size
+        var bytesRead: Int
+
+        val threeChunks: MutableList<String> = MutableList(3) { "" }
+
+        eventsConnection.getInputStream().use { stream ->
+            try {
+                while (stream.read(buffer).also { bytesRead = it } != -1) {
+                    val chunks = saveChunksAndReturnThem(buffer, bytesRead, threeChunks)
+                    val index = chunks.indexOf("\"type\":\"agent_message_success\"")
+                    if (index != -1) {
+                        val content = chunks
+                            .substringAfterLast("\"type\":\"agent_message_success\"")
+                            .substringAfter("\"content\":")
+                            .substringBefore(",\"chainOfThought\"")
+
+                        println("MAHYA:: CONTENT $content TIME: ${Date.from(Instant.now())} \n")
+                    }
+                }
+
+
+            } catch (ex: Exception) {
+                println("MAHYA:: Exception $ex")
             }
         }
 
 
-        println("MAHYA:: DONE : Message ID $messageId   TIME: ${Date.from(Instant.now())}\n")
-
-        return messageId
+        return ""
     }
 
     private fun saveChunksAndReturnThem(
@@ -206,3 +256,12 @@ class DustApiService {
         private val BASE_URL = "https://dust.tt/api/v1/w/$WORKSPACE_ID"
     }
 }
+
+sealed interface MessageMeta {
+    data object NotAvailable : MessageMeta
+    data class Available(
+        val messageId: String,
+        val conversationId: String
+    ) : MessageMeta
+}
+
