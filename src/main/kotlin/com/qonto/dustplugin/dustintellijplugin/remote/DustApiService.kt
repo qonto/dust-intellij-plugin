@@ -23,7 +23,7 @@ import java.util.*
 
 class DustApiService {
 
-    private val CONVERSATION_ID = "t6BI91HmgJ"
+    private val CONVERSATION_ID = "97ABxfSsTv"
 
     private val httpClient = HttpClient {
         install(ContentNegotiation) {
@@ -136,36 +136,41 @@ class DustApiService {
         withContext(Dispatchers.IO) {
             val eventsConnection = URL(url).openConnection()
                 .apply {
-                    readTimeout = Int.MAX_VALUE
-                    connectTimeout = Int.MAX_VALUE
+                    readTimeout = 10000
+                    connectTimeout = 60000
                     setRequestProperty("Authorization", "Bearer $API_KEY")
                 }
 
             val inputStream = eventsConnection.getInputStream()
-            val buffer = ByteArray(4096) // 4KB buffer size
+            val buffer = ByteArray(2048) // 2KB buffer size
             var bytesRead: Int
 
             val twoChunks: MutableList<String> = MutableList(2) { "" }
             inputStream.use { stream ->
-                while (stream.read(buffer).also { bytesRead = it } != -1) {
+                try {
+                    while (stream.read(buffer).also { bytesRead = it } != -1) {
 
-                    val chunks = saveChunksAndReturnThem(buffer, bytesRead, twoChunks)
+                        val chunks = saveChunksAndReturnThem(buffer, bytesRead, twoChunks)
 
-                    val index = chunks.indexOf("\"type\":\"agent_message_new\"")
-                    if (index != -1) {
-                        val id = chunks
-                            .substringAfterLast("\"type\":\"agent_message_new\"")
-                            .substringAfter("\"messageId\":")
-                            .substringBefore(",")
+                        val index = chunks.indexOf("\"type\":\"agent_message_new\"")
+                        if (index != -1) {
+                            val id = chunks
+                                .substringAfterLast("\"type\":\"agent_message_new\"")
+                                .substringAfter("\"messageId\":")
+                                .substringBefore(",")
 
-                        messageId = id
-                        println("MAHYA:: ID $messageId \n")
+                            messageId = id
+                            println("MAHYA:: ID $messageId TIME: ${Date.from(Instant.now())} \n")
+                        }
                     }
+                } catch (ex: Exception) {
+                    println("MAHYA:: Exception $ex")
                 }
             }
         }
 
-        println("MAHYA:: DONE : Message ID $messageId \n")
+
+        println("MAHYA:: DONE : Message ID $messageId   TIME: ${Date.from(Instant.now())}\n")
 
         return messageId
     }
