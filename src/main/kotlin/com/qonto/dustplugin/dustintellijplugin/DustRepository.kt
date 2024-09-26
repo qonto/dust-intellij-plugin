@@ -3,7 +3,9 @@ package com.qonto.dustplugin.dustintellijplugin
 import com.qonto.dustplugin.dustintellijplugin.models.Assistant
 import com.qonto.dustplugin.dustintellijplugin.models.Conversation
 import com.qonto.dustplugin.dustintellijplugin.remote.DustApiService
+import com.qonto.dustplugin.dustintellijplugin.remote.MessageMeta
 import com.qonto.dustplugin.dustintellijplugin.remote.models.*
+import kotlinx.coroutines.flow.Flow
 
 class DustRepository(
     private val dustApiService: DustApiService
@@ -26,16 +28,26 @@ class DustRepository(
 
     suspend fun createMessage(
 //        conversationId: String,
-//        message: String,
-//        assistantId: String
+        message: String,
+        assistantId: String
     ): Result<RemoteMessage> {
-        return dustApiService.createMessage()
+        return dustApiService.createMessage(message = message, assistantId = assistantId)
     }
 
-    suspend fun getLastAgentMessageId(
+    fun getLastAgentMessageId(
 //        conversationId: String
-    ): String? {
+    ): Flow<MessageMeta> {
         return dustApiService.getLastAgentMessageId()
+    }
+
+    fun getLastMessage(
+        conversationId: String,
+        messageId: String,
+    ): String {
+        return dustApiService.getMessageContent(
+            conversationId = conversationId,
+            messageId = messageId,
+        )
     }
 
     private fun RemoteAssistant.toAssistant() = Assistant(

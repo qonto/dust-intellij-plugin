@@ -14,8 +14,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.core.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.serialization.json.Json
 import java.net.URL
 import java.time.Instant
@@ -23,15 +23,15 @@ import java.util.*
 
 class DustApiService {
 
-    private val CONVERSATION_ID = "t6BI91HmgJ"
+    private val CONVERSATION_ID = "97ABxfSsTv"
 
     private val httpClient = HttpClient {
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
         }
-        install(Logging) { logger = Logger.SIMPLE }
+        install(Logging) { logger = Logger.EMPTY }
         install(HttpTimeout) {
-            requestTimeoutMillis = 1000L
+            requestTimeoutMillis = 10000L
         }
     }
 
@@ -51,14 +51,14 @@ class DustApiService {
             response
         }
         res.onSuccess {
-            thisLogger().warn(
+            println(
                 "MAHYA:: RESPONSE IS SUCCESS in ✅\n First 10 are: ${
                     res.map {
                         it.agentConfigurations.take(10).map {
                             "NAME: ${it.name} ; ID: ${it.sId}"
                         }
                     }
-                }\n Size of agents: ${it.agentConfigurations.size}"
+                }\n Size of agents: ${it.agentConfigurations.size} \n"
             )
         }
 
@@ -77,10 +77,10 @@ class DustApiService {
             response
         }
         res.onSuccess {
-            thisLogger().warn(
+            println(
                 "MAHYA:: Create conversation IS SUCCESS in ✅ ${
                     res.map { it }
-                }\n Conversation Id: ${it.conversation.sId}"
+                }\n Conversation Id: ${it.conversation.sId} \n"
             )
         }
 
@@ -91,7 +91,7 @@ class DustApiService {
 
     suspend fun createMessage(
         conversationId: String = CONVERSATION_ID,
-        message: String = "HELLO FROM MAHYA ${Date.from(Instant.now())}",
+        message: String,
         assistantId: String = "mistral-large"
     ): Result<RemoteMessage> {
         val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/messages"
@@ -112,8 +112,8 @@ class DustApiService {
         }
 
         res.onSuccess {
-            thisLogger().warn(
-                "MAHYA:: Create message IS SUCCESS in ✅ ${res.map { it }}"
+            println(
+                "MAHYA:: Create message IS SUCCESS in ✅ ${res.map { it }} \n"
             )
         }
 
@@ -126,30 +126,30 @@ class DustApiService {
     "Some HTTP client libraries only return the response body after the connection has been closed by the server."
     In this method I'm only able to read the buffer after 25 seconds!
      */
-    suspend fun getLastAgentMessageId(
+    fun getLastAgentMessageId(
         conversationId: String = CONVERSATION_ID,
-    ): String? {
+    ): Flow<MessageMeta> {
+        println("MAHYA:: Start getLastAgentMessageId \n")
         var messageId: String? = null
         val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/events"
 
-        // Reads all the events and waits until the stream is closed
-        withContext(Dispatchers.IO) {
-            val eventsConnection = URL(url).openConnection()
-                .apply {
-                    readTimeout = Int.MAX_VALUE
-                    connectTimeout = Int.MAX_VALUE
-                    setRequestProperty("Authorization", "Bearer $API_KEY")
-                }
+        val eventsConnection = URL(url).openConnection()
+            .apply {
+                readTimeout = 10000
+                connectTimeout = 60000
+                setRequestProperty("Authorization", "Bearer $API_KEY")
+            }
 
-            val inputStream = eventsConnection.getInputStream()
-            val buffer = ByteArray(4096) // 4KB buffer size
-            var bytesRead: Int
+        val inputStream = eventsConnection.getInputStream()
+        val buffer = ByteArray(2048) // 2KB buffer size
+        var bytesRead: Int
 
-            val twoChunks: MutableList<String> = MutableList(2) { "" }
-            inputStream.use { stream ->
+        val threeChunks: MutableList<String> = MutableList(3) { "" }
+        inputStream.use { stream ->
+            try {
                 while (stream.read(buffer).also { bytesRead = it } != -1) {
 
-                    val chunks = saveChunksAndReturnThem(buffer, bytesRead, twoChunks)
+                    val chunks = saveChunksAndReturnThem(buffer, bytesRead, threeChunks)
 
                     val index = chunks.indexOf("\"type\":\"agent_message_new\"")
                     if (index != -1) {
@@ -158,37 +158,98 @@ class DustApiService {
                             .substringAfter("\"messageId\":")
                             .substringBefore(",")
 
-                        messageId = id
-                        println("MAHYA:: ID $messageId \n")
+                        messageId = id.substringAfter("\"").substringBefore("\"")
                     }
                 }
+            } catch (ex: Exception) {
+                println("MAHYA:: Exception $ex")
             }
         }
 
-        println("MAHYA:: DONE : Message ID $messageId \n")
+        println("MAHYA:: DONE : Message ID $messageId ::: Conversation ID $conversationId  \nTIME: ${Date.from(Instant.now())}\n")
 
-        return messageId
+        return flowOf(
+            if (messageId != null) {
+                MessageMeta.Available(
+                    messageId = messageId!!,
+                    conversationId = conversationId
+                )
+            } else {
+                MessageMeta.NotAvailable
+            }
+        )
+    }
+
+    fun getMessageContent(
+        conversationId: String,
+        messageId: String,
+    ): String {
+        println("MAHYA:: Start getMessageContent \n")
+
+        val messagesPath = "messages/$messageId/events"
+        val url = "$BASE_URL/$CONVERSATION_PATH/$conversationId/$messagesPath"
+
+        // Reads all the events and waits until the stream is closed
+        val eventsConnection = URL(url).openConnection()
+            .apply {
+                readTimeout = 10000
+                connectTimeout = 60000
+                setRequestProperty("Authorization", "Bearer $API_KEY")
+            }
+
+        val buffer = ByteArray(2048) // 2KB buffer size
+        var bytesRead: Int
+
+        val threeChunks: MutableList<String> = MutableList(3) { "" }
+
+        var messageContent = ""
+        eventsConnection.getInputStream().use { stream ->
+            try {
+                while (stream.read(buffer).also { bytesRead = it } != -1) {
+                    val chunks = saveChunksAndReturnThem(buffer, bytesRead, threeChunks)
+                    val index = chunks.indexOf("\"type\":\"agent_message_success\"")
+                    if (index != -1) {
+                        val content = chunks
+                            .substringAfterLast("\"type\":\"agent_message_success\"")
+                            .substringAfter("\"content\":")
+                            .substringBefore(",\"chainOfThought\"")
+
+                        messageContent = content
+                    }
+                }
+
+
+            } catch (ex: Exception) {
+                println("MAHYA:: Exception $ex")
+            }
+        }
+
+        println("MAHYA:: CONTENT from Dust $messageContent \nTIME: ${Date.from(Instant.now())} \n")
+        return messageContent
     }
 
     private fun saveChunksAndReturnThem(
         buffer: ByteArray,
         bytesRead: Int,
-        twoChunks: MutableList<String>
+        threeChunks: MutableList<String>
     ): String {
         // We need at most two chunks to get the agents message id
         // one is not enough because it can be received at the ned of the chunk so
         // it will be broken
         val chunk = String(buffer.copyOf(bytesRead))
-        if (twoChunks[0].isEmpty()) {
-            twoChunks.add(0, chunk)
-        } else if (twoChunks[1].isEmpty()) {
-            twoChunks.add(1, chunk)
+        if (threeChunks[0].isEmpty()) {
+            threeChunks[0] = chunk
+        } else if (threeChunks[1].isEmpty()) {
+            threeChunks[1] = chunk
+        } else if (threeChunks[2].isEmpty()) {
+            threeChunks[2] = chunk
         } else {
-            Collections.rotate(twoChunks, -1)
-            twoChunks.add(1, chunk)
+            threeChunks[0] = threeChunks[1]
+            threeChunks[1] = threeChunks[2]
+            threeChunks[2] = chunk
         }
 
-        return twoChunks.toString()
+        return threeChunks.toString()
     }
 
 
@@ -198,3 +259,12 @@ class DustApiService {
         private val BASE_URL = "https://dust.tt/api/v1/w/$WORKSPACE_ID"
     }
 }
+
+sealed interface MessageMeta {
+    data object NotAvailable : MessageMeta
+    data class Available(
+        val messageId: String,
+        val conversationId: String
+    ) : MessageMeta
+}
+
